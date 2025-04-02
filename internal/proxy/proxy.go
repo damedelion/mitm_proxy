@@ -93,13 +93,11 @@ func handleHTTPS(conn net.Conn, request *http.Request) {
 	reader := bufio.NewReader(tlsConn)
 	request, err = http.ReadRequest(reader)
 	if err != nil {
-		println("read request error:", err.Error())
+		println(err.Error())
 		return
 	}
 
-	targetConn, err := tls.Dial("tcp", net.JoinHostPort(request.Host, "443"), &tls.Config{
-		InsecureSkipVerify: true,
-	})
+	targetConn, err := tls.Dial("tcp", net.JoinHostPort(request.Host, "443"), &tls.Config{})
 	if err != nil {
 		println(err.Error())
 		return
