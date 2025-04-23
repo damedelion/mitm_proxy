@@ -22,6 +22,12 @@ cd mitm_proxy
   sudo update-ca-certificates
   ```
 
+- **Arch**:
+  ```bash
+  sudo cp ca.crt /etc/ca-certificates/trust-source/anchors
+  sudo update-ca-trust
+  ```
+
 - **Windows**:  
   Импортируйте через "Доверенные корневые центры сертификации"
 
@@ -70,7 +76,7 @@ curl -x http://localhost:8080 http://mail.ru
 
 **HTTPS-запросы**:
 ```bash
-curl -x http://localhost:8080 https://mail.ru --cacert ca.crt
+curl -x http://localhost:8080 https://mail.ru
 ```
 
 **В браузере**:  
