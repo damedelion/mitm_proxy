@@ -134,7 +134,7 @@ func alter(r *http.Request) {
 func generateCert(host string) (tls.Certificate, error) {
 	serial := time.Now().UnixNano()
 
-	gen := exec.Command("./gen_cert.sh", host, fmt.Sprintf("%d", serial))
+	gen := exec.Command("sh", "gen_cert.sh", host, fmt.Sprintf("%d", serial))
 	certPEM, err := gen.Output()
 	if err != nil {
 		println("err:", err.Error())

@@ -13,7 +13,7 @@ COPY gen_cert.sh ./
 COPY . ./
 
 RUN mkdir -p /usr/local/share/ca-certificates && \
-    cp ca.crt /usr/local/share/ca-certificates/mitm-proxy-ca.crt && \
+    cp ca.crt /usr/local/share/ca-certificates && \
     update-ca-certificates --fresh && \
     go build -o mitm_proxy ./cmd
 
