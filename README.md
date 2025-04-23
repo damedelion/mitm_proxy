@@ -37,8 +37,8 @@ cd mitm_proxy
 ### 3. Запуск Docker
 
 ```bash
-docker build -t damedelion/mitm_proxy .
-docker run -d -p 8080:8080 damedelion/mitm_proxy
+docker-compose build
+docker-compose up
 ```
 
 ## Функционал
