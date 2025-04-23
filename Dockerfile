@@ -17,5 +17,5 @@ RUN mkdir -p /usr/local/share/ca-certificates && \
     update-ca-certificates --fresh && \
     go build -o mitm_proxy ./cmd
 
-EXPOSE 8080
+EXPOSE 8080 8081
 CMD ["./mitm_proxy"]

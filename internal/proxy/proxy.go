@@ -2,8 +2,10 @@ package proxy
 
 import (
 	"bufio"
+	"bytes"
 	"crypto/tls"
 	"fmt"
+	"io"
 	"net"
 	"net/http"
 	"net/url"
@@ -11,10 +13,12 @@ import (
 	"os/exec"
 	"time"
 
-	"github.com/damedelion/mitm_proxy/pkg/out"
+	"github.com/damedelion/mitm_proxy/internal/db"
+	"github.com/damedelion/mitm_proxy/internal/parser"
+	"go.mongodb.org/mongo-driver/v2/mongo"
 )
 
-func HandleConnection(conn net.Conn) {
+func HandleConnection(conn net.Conn, client *mongo.Client) {
 	defer conn.Close()
 	reader := bufio.NewReader(conn)
 
@@ -23,16 +27,16 @@ func HandleConnection(conn net.Conn) {
 		println("failed to read request:", err.Error())
 	}
 
-	out.Request(request)
+	//out.Request(request)
 
 	if request.Method == "CONNECT" {
-		handleHTTPS(conn, request)
+		handleHTTPS(conn, request, client)
 		return
 	}
-	handleHTTP(conn, request)
+	handleHTTP(conn, request, client)
 }
 
-func handleHTTP(conn net.Conn, request *http.Request) {
+func handleHTTP(conn net.Conn, request *http.Request, client *mongo.Client) {
 	targetConn, err := net.Dial("tcp", net.JoinHostPort(request.Host, "80"))
 	if err != nil {
 		println(err.Error())
@@ -40,7 +44,28 @@ func handleHTTP(conn net.Conn, request *http.Request) {
 	}
 	defer targetConn.Close()
 
+	bodyBytes, err := io.ReadAll(request.Body)
+	if err != nil {
+		println("Failed to read request body:", err.Error())
+		return
+	}
+	request.Body.Close()
+	request.Body = io.NopCloser(bytes.NewReader(bodyBytes))
+
 	alter(request)
+
+	parsedRequest, err := parser.ParseRequest(request, bodyBytes)
+	if err != nil {
+		println(err.Error())
+		return
+	}
+	id, err := db.WriteRequest(parsedRequest, client)
+	if err != nil {
+		println(err.Error())
+		return
+	} else {
+		println("successful db write")
+	}
 
 	if err = request.Write(targetConn); err != nil {
 		println(err.Error())
@@ -53,7 +78,26 @@ func handleHTTP(conn net.Conn, request *http.Request) {
 		println(err.Error())
 		return
 	}
-	defer response.Body.Close()
+	bodyBytes, err = io.ReadAll(response.Body)
+	if err != nil {
+		println("Failed to read response body:", err.Error())
+		return
+	}
+	response.Body.Close()
+	response.Body = io.NopCloser(bytes.NewReader(bodyBytes))
+
+	parsedResponse, err := parser.ParseResponse(response, bodyBytes, id)
+	if err != nil {
+		println(err.Error())
+		return
+	}
+	err = db.WriteResponse(parsedResponse, client)
+	if err != nil {
+		println(err.Error())
+		return
+	} else {
+		println("successful db write")
+	}
 
 	if err = response.Write(conn); err != nil {
 		println(err.Error())
@@ -61,7 +105,7 @@ func handleHTTP(conn net.Conn, request *http.Request) {
 	}
 }
 
-func handleHTTPS(conn net.Conn, request *http.Request) {
+func handleHTTPS(conn net.Conn, request *http.Request, client *mongo.Client) {
 	conn.Write([]byte("HTTP/1.1 200 Connection Established\r\n\r\n"))
 
 	host, _, err := net.SplitHostPort(request.Host)
@@ -87,14 +131,34 @@ func handleHTTPS(conn net.Conn, request *http.Request) {
 	}
 
 	state := tlsConn.ConnectionState()
-	fmt.Println("SSL ServerName : " + state.ServerName)
-	fmt.Println("SSL Handshake : ", state.HandshakeComplete)
+	fmt.Println("SSL ServerName:", state.ServerName)
+	fmt.Println("SSL Handshake:", state.HandshakeComplete)
 
 	reader := bufio.NewReader(tlsConn)
 	request, err = http.ReadRequest(reader)
 	if err != nil {
 		println(err.Error())
 		return
+	}
+	bodyBytes, err := io.ReadAll(request.Body)
+	if err != nil {
+		println("Failed to read request body:", err.Error())
+		return
+	}
+	request.Body.Close()
+	request.Body = io.NopCloser(bytes.NewReader(bodyBytes))
+
+	parsedRequest, err := parser.ParseRequest(request, bodyBytes)
+	if err != nil {
+		println(err.Error())
+		return
+	}
+	id, err := db.WriteRequest(parsedRequest, client)
+	if err != nil {
+		println(err.Error())
+		return
+	} else {
+		println("successful db write")
 	}
 
 	targetConn, err := tls.Dial("tcp", net.JoinHostPort(request.Host, "443"), &tls.Config{})
@@ -114,7 +178,26 @@ func handleHTTPS(conn net.Conn, request *http.Request) {
 		println(err.Error())
 		return
 	}
-	defer resp.Body.Close()
+	bodyBytes, err = io.ReadAll(resp.Body)
+	if err != nil {
+		println("Failed to read response body:", err.Error())
+		return
+	}
+	resp.Body.Close()
+	resp.Body = io.NopCloser(bytes.NewReader(bodyBytes))
+
+	parsedResponse, err := parser.ParseResponse(resp, bodyBytes, id)
+	if err != nil {
+		println(err.Error())
+		return
+	}
+	err = db.WriteResponse(parsedResponse, client)
+	if err != nil {
+		println(err.Error())
+		return
+	} else {
+		println("successful db write")
+	}
 
 	if err := resp.Write(tlsConn); err != nil {
 		println(err.Error())
